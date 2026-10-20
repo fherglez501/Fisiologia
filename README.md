@@ -1,5 +1,16 @@
 # Fisiologia
 
+## Prácticas disponibles
+
+- **[C6 · Metabolismo y suministro de energía](practicas/C6_metabolismo/README.md):**
+  práctica guiada de 100 minutos, cuaderno Quarto, script de R base, datos simulados,
+  tres gráficas, plantilla de respuestas y guía docente. Abre
+  `practicas/C6_metabolismo/C6_metabolismo.Rproj` para comenzar.
+
+> **Nota sobre el material anterior:** el README de tamaño y escala se conserva abajo.
+> Al incorporar C6, sus archivos de C3 todavía no estaban cargados en este repositorio.
+> Las instrucciones siguientes de C3 requieren esos archivos; para C6 usa el enlace anterior.
+
 ## Tamaño y escala en fauna silvestre con R
 
 Proyecto de Quarto para explicar geometría, alometría, metabolismo y locomoción

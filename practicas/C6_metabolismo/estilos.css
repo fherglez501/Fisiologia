@@ -1,0 +1,8 @@
+:root { --bs-primary: #147d92; }
+body { color: #18313e; font-size: 1.03rem; }
+h1, h2, h3 { color: #155e70; }
+h2 { margin-top: 2.2rem; border-bottom: 2px solid #d9e9ed; padding-bottom: .45rem; }
+.quarto-title-block { border-top: 7px solid #147d92; padding-top: 1.2rem; }
+pre.sourceCode { border-left: 3px solid #8cb9c4; }
+table { font-size: .94rem; }
+figcaption { color: #526772; }

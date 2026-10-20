@@ -1,0 +1,9 @@
+.Rhistory
+.RData
+.Ruserdata
+.Rproj.user/
+.quarto/
+C6_metabolismo_files/
+C6_metabolismo.md
+core
+core.*

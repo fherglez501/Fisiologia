@@ -1,0 +1,357 @@
+---
+title: "C6 · ¿Cómo obtiene y utiliza energía un animal?"
+subtitle: "Práctica guiada de fisiología con R y fauna silvestre"
+author: "Material docente de Fisiología"
+lang: es
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 2
+    number-sections: false
+    code-copy: true
+    embed-resources: true
+    css: estilos.css
+execute:
+  echo: true
+  warning: true
+  message: false
+  error: false
+  cache: false
+---
+
+::: {.callout-note}
+## Una pregunta para toda la práctica
+Si un animal dispone de menos alimento y gasta más energía, ¿qué ocurre con sus reservas? Antes de responder, aprenderemos a medir una tasa y a construir un balance.
+:::
+
+**Nivel:** licenciatura, primeros pasos con R. **Duración sugerida:** 100 minutos. **Modalidad:** parejas, con conclusión individual. **Requisitos:** operaciones aritméticas y conceptos de ATP y metabolismo de C6. No se requiere experiencia con modelos estadísticos.
+
+**Todos los datos son simulados.** Los animales son hipotéticos y no representan valores normales de una especie. Es una práctica de computadora; no requiere manipular animales. Los resultados no son recomendaciones alimentarias ni protocolos experimentales.
+
+## Lo que podrás hacer
+
+Al terminar esta sesión podrás:
+
+1. Calcular el consumo de oxígeno de un pez corrigiendo el consumo de fondo y la masa.
+2. Distinguir una tasa de consumo de una cantidad de energía o una reserva.
+3. Resolver un presupuesto energético y explicar cuándo se acumulan o movilizan reservas.
+4. Modificar un supuesto y justificar una predicción con una gráfica y sus límites.
+
+| Momento | Actividad | Tiempo |
+|---|---|---:|
+| Preparación | Abrir el proyecto, asignar valores y hacer una predicción | 10 min |
+| Ejercicio 1 | Consumo de oxígeno de un pez | 30 min |
+| Ejercicio 2 | Presupuesto energético de un roedor | 35 min |
+| Reto | Cambiar ingestión y gasto; explicar el resultado | 15 min |
+| Cierre | Revisar unidades, entregar y discutir límites | 10 min |
+
+El complemento sobre temperatura es opcional y añade 10 minutos.
+
+## Antes de empezar
+
+Abre `C6_metabolismo.Rproj` en RStudio. Puedes trabajar de dos maneras:
+
+- **Cuaderno:** abre este `.qmd` y ejecuta cada bloque, de arriba hacia abajo. Pulsa **Render** para generar el informe HTML. Esta opción necesita Quarto, `knitr` y `rmarkdown`.
+- **Solo R:** abre `C6_metabolismo.R` y ejecuta sus secciones con **Ctrl + Enter**. No necesita paquetes adicionales. El script también puede ejecutarse completo con `source("C6_metabolismo.R", encoding = "UTF-8")` y guarda tres gráficas en un PDF.
+
+El archivo `C6_metabolismo.html` ya preparado se puede leer en un navegador sin R. No ejecuta código: para modificar cálculos usa el `.qmd` o el `.R`.
+
+En R, `<-` guarda un valor; `#` inicia un comentario; `c()` reúne valores y `$` selecciona una columna. Usa punto decimal: `0.5`, no `0,5`. Ejecutar una línea vuelve a calcularla: después de cambiar un dato, vuelve a ejecutar los bloques que lo utilizan.
+
+```{r}
+#| label: preparacion
+# Crea las carpetas de salida si todavía no existen.
+dir.create("datos", showWarnings = FALSE)
+dir.create("resultados", showWarnings = FALSE)
+options(width = 90)
+
+# Una primera operación: pasar de gramos a kilogramos.
+masa_g <- 10
+masa_kg <- masa_g / 1000
+print(masa_kg)
+```
+
+**Predicción inicial:** escribe una oración sobre lo que esperas que ocurra con las reservas si disminuye la ingestión. Al final volverás a ella.
+
+## Ejercicio 1 · ¿Cuánto oxígeno consume un pez?
+
+### El escenario
+
+Un pez de **10 g** permanece, de manera hipotética, en una cámara con **2 L de agua efectivos**. Ese volumen ya descuenta el volumen desplazado por el animal. Se simula un intervalo cerrado de una hora, a temperatura constante y con mezcla suficiente. Un **blanco**, bajo condiciones comparables pero sin pez, permite estimar el consumo de oxígeno del sistema.
+
+La concentración de oxígeno disminuye con el tiempo. Primero calcularemos la pendiente de esa disminución; después descontaremos el blanco. La relación con C6 es que el oxígeno participa como aceptor final de electrones en la respiración aeróbica, pero su consumo **no mide directamente moléculas de ATP** ni toda la contribución anaerobia.
+
+### Paso 1. Construye los datos
+
+Usamos líneas ideales para que se vea con claridad el cálculo. No añadimos ruido aleatorio; por eso no hace falta una semilla. En un experimento real habría variación y se revisaría la calidad del registro.
+
+```{r}
+#| label: datos-oxigeno
+# seq() produce 0, 10, 20, ..., 60 minutos.
+tiempo_min <- seq(0, 60, by = 10)
+tiempo_h <- tiempo_min / 60
+
+# Disminuciones SIMULADAS: sistema 0.30 y blanco 0.05 mg O2/L/h.
+# data.frame() organiza las columnas en una tabla.
+oxigeno <- data.frame(
+  tiempo_min = tiempo_min,
+  tiempo_h = tiempo_h,
+  sistema_mg_L = 8 - 0.30 * tiempo_h,
+  blanco_mg_L = 8 - 0.05 * tiempo_h
+)
+print(oxigeno)
+
+# Exporta los mismos datos que acabas de crear.
+write.csv(oxigeno, "datos/oxigeno_simulado.csv", row.names = FALSE)
+```
+
+**Antes de graficar:** ¿en cuál de las dos series esperas una caída más pronunciada? Explica por qué la disminución del blanco no debe atribuirse al pez.
+
+### Paso 2. Mira la pendiente
+
+```{r}
+#| label: fig-oxigeno
+#| fig-cap: "Datos simulados. La caída del sistema incluye al pez y al consumo de fondo."
+#| fig-width: 8
+#| fig-height: 4.8
+# type = "b" dibuja puntos y líneas. Las formas también distinguen series.
+plot(oxigeno$tiempo_min, oxigeno$sistema_mg_L,
+     type = "b", pch = 16, col = "#147D92", lwd = 2,
+     ylim = range(oxigeno$sistema_mg_L, oxigeno$blanco_mg_L),
+     xlab = "Tiempo (min)", ylab = "Concentración de O2 (mg/L)",
+     main = "Oxígeno en la cámara: ejemplo simulado")
+lines(oxigeno$tiempo_min, oxigeno$blanco_mg_L,
+      type = "b", pch = 17, col = "#B65C24", lty = 2, lwd = 2)
+legend("bottomleft", c("Sistema con pez", "Blanco sin pez"),
+       col = c("#147D92", "#B65C24"), pch = c(16, 17),
+       lty = c(1, 2), lwd = 2, bty = "n")
+```
+
+El eje vertical muestra **concentración**, no consumo total. La gráfica empieza cerca de 7.7 mg/L para apreciar la pequeña caída; no representa una pérdida de todo el oxígeno.
+
+### Paso 3. De pendiente a tasa
+
+`lm(y ~ x)` ajusta una recta: pregunta cuánto cambia `y` al aumentar `x`. `coef(modelo)[2]` extrae su pendiente. Aquí usamos **horas** para obtener mg O₂/L/h. Solo utilizamos la pendiente descriptiva; estos registros repetidos de un individuo no son réplicas biológicas independientes.
+
+```{r}
+#| label: tasa-oxigeno
+# Ajusta concentración en función del tiempo medido en horas.
+modelo_sistema <- lm(sistema_mg_L ~ tiempo_h, data = oxigeno)
+modelo_blanco <- lm(blanco_mg_L ~ tiempo_h, data = oxigeno)
+
+# Las pendientes son negativas. El signo menos las convierte en descensos positivos.
+descenso_sistema <- -unname(coef(modelo_sistema)[2])
+descenso_blanco <- -unname(coef(modelo_blanco)[2])
+
+volumen_efectivo_L <- 2
+masa_g <- 10
+masa_kg <- masa_g / 1000
+
+# (mg O2/L/h) * L = mg O2/h atribuibles al animal.
+consumo_total_mg_h <- (descenso_sistema - descenso_blanco) * volumen_efectivo_L
+
+# (mg O2/h) / kg = mg O2/kg/h.
+consumo_especifico_mg_kg_h <- consumo_total_mg_h / masa_kg
+
+resultado_oxigeno <- data.frame(
+  descenso_sistema_mg_L_h = descenso_sistema,
+  descenso_blanco_mg_L_h = descenso_blanco,
+  consumo_total_mg_h = consumo_total_mg_h,
+  consumo_especifico_mg_kg_h = consumo_especifico_mg_kg_h
+)
+print(round(resultado_oxigeno, 3))
+write.csv(resultado_oxigeno, "resultados/consumo_oxigeno.csv", row.names = FALSE)
+```
+
+Comprueba a mano: **2 × (0.30 − 0.05) = 0.50 mg O₂/h**. Al dividir entre **0.010 kg** obtienes **50 mg O₂/kg/h**.
+
+::: {.callout-important}
+## Qué significa y qué no significa
+Es una tasa del intervalo simulado. No podemos llamarla metabolismo estándar solo porque el pez parezca inmóvil: faltan condiciones como estado posabsortivo y aclimatación. Tampoco podemos inferir ATP exacto, tolerancia a hipoxia o una tasa diaria constante.
+:::
+
+### Tu turno · preguntas 1 y 2
+
+1. Si omites el blanco, ¿cuánto consumo total estimas y en cuánto lo sobreestimas, en mg O₂/h y en porcentaje respecto al valor corregido?
+2. Cambia únicamente `masa_g <- 20` y vuelve a ejecutar el bloque de tasa. ¿Qué ocurre con la tasa total y con la tasa por kilogramo? **Es un ejercicio de denominador:** conservar la misma pendiente no predice cómo respiraría un pez real de mayor tamaño. Restablece 10 g antes de continuar.
+
+No conviertas los **mg** de O₂ directamente en **L** con un factor energético: necesitarías una conversión físico-química y condiciones del gas.
+
+## Ejercicio 2 · ¿Alcanza la energía para mantener reservas?
+
+### El escenario
+
+Un roedor silvestre hipotético ingiere 300 kJ en un día. Parte de esa energía se pierde en heces y orina. El resto cubre el gasto metabólico, la producción y el cambio de reservas. Comparamos ese escenario con otro de menor ingestión. **Todos los términos se refieren a un día.**
+
+| Símbolo | Significado | Unidad |
+|---|---|---|
+| I | Energía ingerida | kJ/día |
+| F | Energía perdida en heces | kJ/día |
+| U | Energía perdida en orina | kJ/día |
+| G | Energía perdida en gases combustibles; aquí se fija en 0 | kJ/día |
+| EM | Energía metabolizable: I − F − U − G | kJ/día |
+| M | Gasto metabólico: mantenimiento, actividad, termorregulación y digestión | kJ/día |
+| P | Energía retenida en crecimiento estructural o transferida a productos reproductivos | kJ/día |
+| ΔE | Cambio de reservas: EM − M − P | kJ/día |
+
+Esta convención separa **P** de las reservas para evitar doble conteo. El costo metabólico de sintetizar tejidos está en M; su energía retenida está en P.
+
+### Paso 4. Calcula entradas, pérdidas y reservas
+
+```{r}
+#| label: presupuesto
+# Cada fila representa un escenario didáctico, no un animal muestreado.
+presupuesto <- data.frame(
+  escenario = c("Inicial", "Menor ingestión"),
+  I_kJ_dia = c(300, 240),
+  F_kJ_dia = c(60, 60),
+  U_kJ_dia = c(15, 15),
+  G_kJ_dia = c(0, 0),
+  M_kJ_dia = c(180, 180),
+  P_kJ_dia = c(20, 20)
+)
+
+# Guarda las entradas antes de añadir resultados.
+write.csv(presupuesto, "datos/presupuesto_simulado.csv", row.names = FALSE,
+          fileEncoding = "UTF-8")
+
+# $ permite usar una columna y crear otra con los resultados de cada fila.
+presupuesto$EM_kJ_dia <- presupuesto$I_kJ_dia - presupuesto$F_kJ_dia -
+  presupuesto$U_kJ_dia - presupuesto$G_kJ_dia
+presupuesto$reservas_kJ_dia <- presupuesto$EM_kJ_dia -
+  presupuesto$M_kJ_dia - presupuesto$P_kJ_dia
+print(presupuesto)
+write.csv(presupuesto, "resultados/balance_energetico.csv", row.names = FALSE,
+          fileEncoding = "UTF-8")
+```
+
+### Paso 5. Interpreta el signo
+
+```{r}
+#| label: fig-reservas
+#| fig-cap: "Simulación: se mantienen F, U, G, M y P constantes y solo cambia I."
+#| fig-width: 8
+#| fig-height: 4.8
+# Incluye siempre el cero: permite comparar acumulación y movilización.
+limites <- range(c(0, presupuesto$reservas_kJ_dia)) + c(-15, 15)
+barras <- barplot(presupuesto$reservas_kJ_dia,
+                  names.arg = presupuesto$escenario,
+                  col = c("#147D92", "#B65C24"), border = NA,
+                  ylim = limites, ylab = "Cambio de reservas (kJ/día)",
+                  main = "Menor ingestión cambia el balance")
+abline(h = 0, lwd = 2)
+text(barras, presupuesto$reservas_kJ_dia,
+     labels = paste(presupuesto$reservas_kJ_dia, "kJ/día"),
+     pos = ifelse(presupuesto$reservas_kJ_dia >= 0, 3, 1))
+```
+
+**ΔE > 0:** acumulación de reservas. **ΔE < 0:** movilización de reservas para cerrar el balance, mientras existan reservas disponibles y se mantengan estos supuestos. **ΔE = 0:** no hay cambio neto de reservas en el intervalo.
+
+No es una predicción de pérdida de peso ni significa supervivencia indefinida. F y U podrían cambiar con la ingestión; M y P también podrían ajustarse. Mantenerlos constantes aquí sirve para aislar una relación matemática.
+
+### Tu turno · preguntas 3 y 4
+
+3. Escribe los valores de EM y ΔE de ambos escenarios. ¿Por qué una reserva negativa no significa que la energía ingerida sea negativa?
+4. ¿Cuánta energía debe ingerir el animal para que ΔE = 0 si se mantienen F = 60, U = 15, G = 0, M = 180 y P = 20 kJ/día? Resuelve la ecuación y compruébala con R.
+
+## Reto · Menos alimentación y mayor actividad
+
+Imagina que una perturbación reduce el tiempo de forrajeo y aumenta los desplazamientos. Esto es una **hipótesis**, no una observación sobre una población. Modifica los dos parámetros del bloque y calcula la predicción antes de ejecutarlo.
+
+```{r}
+#| label: reto
+# CAMBIA AQUÍ: proporción de reducción de ingestión (0.20 significa 20 %).
+reduccion_ingesta <- 0.20
+# CAMBIA AQUÍ: incremento del gasto en kJ/día, NO en porcentaje.
+aumento_gasto_kJ_dia <- 30
+
+# Comprueba que las entradas representen este escenario.
+stopifnot(reduccion_ingesta >= 0, reduccion_ingesta <= 1,
+          aumento_gasto_kJ_dia >= 0)
+
+I_reto <- 300 * (1 - reduccion_ingesta)
+M_reto <- 180 + aumento_gasto_kJ_dia
+EM_reto <- I_reto - 60 - 15 - 0
+reservas_reto <- EM_reto - M_reto - 20
+
+resultado_reto <- data.frame(
+  reduccion_ingesta = reduccion_ingesta,
+  aumento_gasto_kJ_dia = aumento_gasto_kJ_dia,
+  I_kJ_dia = I_reto, M_kJ_dia = M_reto,
+  EM_kJ_dia = EM_reto, reservas_kJ_dia = reservas_reto
+)
+print(resultado_reto)
+write.csv(resultado_reto, "resultados/reto.csv", row.names = FALSE)
+```
+
+```{r}
+#| label: fig-reto
+#| fig-cap: "Comparación de tres escenarios simulados; la línea horizontal marca balance de reservas cero."
+#| fig-width: 8
+#| fig-height: 4.8
+valores_reto <- c(presupuesto$reservas_kJ_dia, reservas_reto)
+barras_reto <- barplot(valores_reto,
+  names.arg = c("Inicial", "Menor ingestión", "Ingestión + actividad"),
+  col = c("#147D92", "#B65C24", "#7D4B91"), border = NA,
+  ylim = range(c(0, valores_reto)) + c(-20, 20),
+  ylab = "Cambio de reservas (kJ/día)",
+  main = "Entrada y gasto actúan sobre las reservas")
+abline(h = 0, lwd = 2)
+text(barras_reto, valores_reto, labels = paste(valores_reto, "kJ/día"),
+     pos = ifelse(valores_reto >= 0, 3, 1))
+```
+
+### Tu turno · preguntas 5 y 6
+
+5. Con los valores iniciales del reto, ¿cuánto vale ΔE y cuánto cambia respecto al escenario inicial? Prueba después una reducción de 10 % y un incremento de gasto de 10 kJ/día. Guarda ambos resultados en tus respuestas e identifica el efecto de cambiar cada término.
+6. Propón **una respuesta fisiológica o conductual posible**, explica un costo asociado y señala **dos datos reales** que necesitarías medir antes de concluir que ocurre en una especie. No deduzcas mortalidad ni pérdida de gramos de tejido con este modelo.
+
+## Entrega y criterios
+
+Entrega una carpeta `C6_Apellido_Nombre` con:
+
+1. Tu `.qmd` o `.R` comentado, con los parámetros finales que utilizaste.
+2. Las seis respuestas, incluida la predicción inicial revisada, en `respuestas_C6.md` (plantilla incluida).
+3. Un HTML renderizado o el PDF de gráficas generado por el script. Incluye la tabla `resultados/reto.csv` y anota en las respuestas los dos escenarios del reto.
+
+La fecha y plataforma de entrega las indicará el docente. Esta práctica propone **evaluación formativa**, sin modificar ponderaciones del curso.
+
+| Criterio de revisión | Evidencia observable |
+|---|---|
+| Cálculo reproducible | El código corre en orden y coincide con las tablas entregadas |
+| Unidades y corrección | Distingue mg/L, mg/h y mg/kg/h; descuenta el blanco |
+| Balance energético | Calcula EM y ΔE sin contar dos veces pérdidas o gasto |
+| Interpretación | Explica el signo, las diferencias y un mecanismo plausible |
+| Límites | Identifica simulación y supuestos; propone dos mediciones reales |
+
+**Pregunta de salida:** explica en dos frases por qué un animal puede mantener casi constante su concentración de ATP mientras aumenta su tasa metabólica.
+
+## Complemento opcional · Temperatura y metabolismo
+
+Este ejercicio recupera la curva conceptual de C6. Es un ectotermo hipotético; no representa el intervalo tolerado por una especie. No se desarrolla Q₁₀, reservado para el tema de temperatura.
+
+```{r}
+#| label: temperatura-opcional
+#| eval: false
+# Ejecuta estas líneas solo si tienes tiempo adicional.
+temperatura_C <- c(15, 20, 25, 30)
+tasa_mg_kg_h <- c(70, 100, 140, 200)
+plot(temperatura_C, tasa_mg_kg_h, type = "b", pch = 16,
+     col = "#147D92", lwd = 2,
+     xlab = "Temperatura (°C)", ylab = "Consumo de O2 (mg/kg/h)",
+     main = "Respuesta simulada dentro de un intervalo")
+# ¿Qué sucede de 20 a 30 °C en ESTE conjunto de datos?
+print(200 / 100)
+```
+
+¿Por qué no podemos prolongar esta curva hasta 50 °C ni usarla para fijar la temperatura de un recinto? Considera especie, aclimatación, actividad y límites fisiológicos.
+
+## Fuentes y relación con el curso
+
+- **Material de clase consultado:** *C6 Metabolismo y suministro de energía*, presentación del curso (42 diapositivas): respirometría, diapositivas 22–26; presupuestos, 32–39; temperatura, 29. Se mantienen sus valores didácticos para facilitar el paso de diapositivas a R.
+- **Lectura central indicada en la presentación:** Willmer, P., Stone, G., & Johnston, I. (2005). *Environmental physiology of animals* (2nd ed.). Blackwell Publishing. Capítulo 6, especialmente secciones 6.5–6.6, pp. 126–139. Los datos de esta práctica no proceden de muestreos del libro.
+- R Core Team. (s. f.). *Fitting linear models*. Documentación oficial de R. <https://stat.ethz.ch/R-manual/R-devel/library/stats/html/lm.html>. Se usa `lm()` únicamente para estimar la pendiente.
+- Posit. (s. f.). *Using R*. Documentación de Quarto. <https://quarto.org/docs/computations/r.html>. Describe la ejecución de bloques R con knitr y la generación del documento.
+
+Los escenarios, preguntas y código son material didáctico elaborado para esta práctica. No se realizan pruebas de significación ni inferencias poblacionales con los datos simulados.
